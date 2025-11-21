@@ -67,6 +67,7 @@ def _apply_optim_in_backward_hook(
         bucket: dist.GradBucket,
         optim_stream_state,
     ) -> torch.futures.Future[torch.Tensor]:
+        print("DEBUG LOG apply_optim_in_backward_hook")
         # Run original hook
         ddp_weakref = hook_state
         ddp_inst = ddp_weakref()

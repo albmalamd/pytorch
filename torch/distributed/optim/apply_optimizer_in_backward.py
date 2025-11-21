@@ -80,11 +80,18 @@ def _apply_optimizer_in_backward(
         param._optimizer_classes.append(optimizer_class)  # type: ignore[attr-defined]
         param._optimizer_kwargs.append(optimizer_kwargs)  # type: ignore[attr-defined]
 
+        print("DEBUG LOG param 1 ")
+
         if not register_hook:
             return
 
+        print("DEBUG LOG param 2", param)
+
         def optimizer_hook(*_unused) -> None:
+            i = 0
             for opt in param._in_backward_optimizers:  # type: ignore[attr-defined]
+                print("DEBUG LOG optimizer hook", i, opt)
+                i += 1
                 opt.step()
 
             param.grad = None

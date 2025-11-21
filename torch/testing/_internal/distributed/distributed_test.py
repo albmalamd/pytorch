@@ -19,6 +19,9 @@ from dataclasses import dataclass
 from datetime import timedelta
 from functools import reduce
 from typing import Any, NamedTuple, Union
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.fully_sharded_data_parallel import ShardingStrategy
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 import numpy as np
 
@@ -4797,17 +4800,18 @@ class DistributedTest:
             torch.manual_seed(my_seed if hardcoded_cpu_seed else self.rank)
             torch.cuda.manual_seed(my_seed if hardcoded_gpu_seed else self.rank)
             torch.cuda.set_device(self.rank)
+            dtype = torch.float64
 
             # Test a simple linear as well as a ResNet model.
             models_to_test = [
-                nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3), nn.Linear(3, 3)).cuda()
+                # nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3), nn.Linear(3, 3)).cuda()
             ]
             if HAS_TORCHVISION:
-                print("DEBUG LOG has torchvision")
+                # print("DEBUG LOG has torchvision")
                 models_to_test.append(torchvision.models.resnet50().cuda())
 
             for j, model in enumerate(models_to_test):
-                print("DEBUG LOG iteration ", j)
+                print("DEBUG LOG iteration j ", j)
                 model_optim_in_bwd = copy.deepcopy(model)
 
                 model = nn.parallel.DistributedDataParallel(
@@ -4816,6 +4820,7 @@ class DistributedTest:
                     gradient_as_bucket_view=gradient_as_bucket_view,
                 )
                 optim = optim_cls(model.parameters(), **optim_kwargs)
+                print("DEBUG LOG optim kwargs", optim_kwargs)
                 if init_before:
                     _apply_optimizer_in_backward(
                         optimizer_class=optim_cls,
@@ -4843,10 +4848,16 @@ class DistributedTest:
                     enabled=True, deterministic=True, benchmark=False
                 ):
                     for i in range(8):
+                        print("DEBUG LOG iteration i", i)
+                        for p1, p2 in zip(
+                            model.parameters(), model_optim_in_bwd.parameters(), strict=True
+                        ):
+                            self.assertEqual(p1, p2, f"Parameters not equal in i = {i}")
                         inp = (
                             torch.randn(1, 3, 1000, 1000, device="cuda")
-                            if j == 1
-                            else torch.randn(10, 3, device="cuda")
+                            # # torch.zeros(1, 3, 1000, 1000, device="cuda")
+                            # if j == 1
+                            # else torch.randn(10, 3, device="cuda")
                         )
                         model(inp).sum().backward()
                         optim.step()
@@ -4858,8 +4869,14 @@ class DistributedTest:
                             model_optim_in_bwd.parameters(),
                             strict=True,
                         ):
-                            print("DEBUG LOG p1: ", p1)
-                            print("DEBUG LOG p2: ", p2)
+                            # print("DEBUG LOG p1: ", p1)
+                            # print("DEBUG LOG p2: ", p2)
+                            print("DEBUG LOG p1 type: ", p1.dtype)
+                            print("DEBUG LOG p2 type: ", p2.dtype)
+                            print("DEBUG LOG p1 grad: ", p1.grad)
+                            print("DEBUG LOG p2 grad: ", p2.grad)
+                            print("DEBUG LOG p1 shape: ", p1.shape)
+                            print("DEBUG LOG p2 shape: ", p2.shape)
                             self.assertEqual(
                                 p1, p2, f"Params not equal at iteration {i}"
                             )
@@ -4935,6 +4952,86 @@ class DistributedTest:
                     hardcoded_cpu_seed=hardcoded_cpu_seed,
                     hardcoded_gpu_seed=hardcoded_gpu_seed,
                 )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_muuuulti_end(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam], [True, False,True, False,True, False,True, False,True,True,False,False]
+            ):
+                print("DEBUG LOG start test case", optim_cls, init_before)
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                    )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_suffix(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.Adam], [True]
+            ):
+                print("DEBUG LOG start test case", optim_cls, init_before, self.rank)
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                        hardcoded_cpu_seed=True,
+                        hardcoded_gpu_seed=True
+                    )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_muuuulti_SGD(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.SGD, torch.optim.SGD, torch.optim.SGD, torch.optim.SGD, torch.optim.SGD, torch.optim.SGD, torch.optim.SGD], [True, False,True, False,True, False,True, False,True,True,False,False]
+            ):
+                print("DEBUG LOG start test case")
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                    )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_muuuulti_Adam(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.Adam, torch.optim.Adam, torch.optim.Adam, torch.optim.Adam, torch.optim.Adam, torch.optim.Adam, torch.optim.Adam], [True, False,True, False,True, False,True, False,True,True,False,False]
+            ):
+                print("DEBUG LOG start test case")
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                    )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_muuuulti_true(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam], [True, True,True, True, True]
+            ):
+                print("DEBUG LOG start test case")
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                    )
+
+        @skip_if_lt_x_gpu(2)
+        def test_ddp_apply_optim_in_backward_muuuulti_false(self):
+            for optim_cls, init_before in itertools.product(
+                [torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam,torch.optim.SGD, torch.optim.Adam], [False, False,False, False, False]
+            ):
+                print("DEBUG LOG start test case")
+                with self.subTest(optim_cls=optim_cls):
+                    self._test_ddp_apply_optim_in_backward(
+                        optim_cls=optim_cls,
+                        optim_kwargs={"lr": 0.03},
+                        init_before=init_before,
+                    )
 
         @skip_if_lt_x_gpu(2)
         def test_ddp_apply_optim_in_backward_grad_as_bucket_view_false(self):
