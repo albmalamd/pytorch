@@ -76,6 +76,11 @@ def _apply_optim_in_backward_hook(
         optimizer_stream = optim_stream_state.optim_stream
         with optimizer_stream:
             fut.wait()
+
+            if process_group.name() == "gloo":
+                # torch.cuda.synchronize()
+                torch.cuda.current_stream().synchronize()
+
             # Apply gradient division since C++ side only allreduces and does
             # not average. TODO: (rohan-varma) the div factor may be different
             # when running with join hook

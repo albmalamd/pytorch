@@ -85,12 +85,12 @@ def _apply_optimizer_in_backward(
         if not register_hook:
             return
 
-        print("DEBUG LOG param 2", param)
+        # print("DEBUG LOG param 2", param)
 
         def optimizer_hook(*_unused) -> None:
             i = 0
             for opt in param._in_backward_optimizers:  # type: ignore[attr-defined]
-                print("DEBUG LOG optimizer hook", i, opt)
+                # print("DEBUG LOG optimizer hook", i, opt)
                 i += 1
                 opt.step()
 

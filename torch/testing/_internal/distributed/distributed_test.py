@@ -4869,14 +4869,6 @@ class DistributedTest:
                             model_optim_in_bwd.parameters(),
                             strict=True,
                         ):
-                            # print("DEBUG LOG p1: ", p1)
-                            # print("DEBUG LOG p2: ", p2)
-                            print("DEBUG LOG p1 type: ", p1.dtype)
-                            print("DEBUG LOG p2 type: ", p2.dtype)
-                            print("DEBUG LOG p1 grad: ", p1.grad)
-                            print("DEBUG LOG p2 grad: ", p2.grad)
-                            print("DEBUG LOG p1 shape: ", p1.shape)
-                            print("DEBUG LOG p2 shape: ", p2.shape)
                             self.assertEqual(
                                 p1, p2, f"Params not equal at iteration {i}"
                             )
