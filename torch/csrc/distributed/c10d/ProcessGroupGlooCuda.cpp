@@ -3,7 +3,9 @@
 #include <torch/csrc/distributed/c10d/ProcessGroupGlooDetail.hpp>
 #include <utility>
 
-#include <gloo/cuda_allreduce_ring_chunked.h>
+#include <gloo/hip_allreduce_ring_chunked.h>
+
+#include <ATen/hip/impl/HIPStreamMasqueradingAsCUDA.h>
 
 namespace c10d {
 
@@ -36,7 +38,7 @@ class AsyncAllreduceCUDADeviceWork : public ProcessGroupGloo::AsyncWork {
       ptrs.push_back(static_cast<T*>(tensor.data_ptr()));
     }
     algo = std::make_unique<
-        gloo::CudaAllreduceRingChunked<T, gloo::CudaDeviceWorkspace<T>>>(
+        gloo::HipAllreduceRingChunked<T, gloo::HipDeviceWorkspace<T>>>(
         context_, ptrs, count);
   }
 
@@ -118,10 +120,9 @@ class AsyncAllreduceCUDAHostWork : public AsyncAllreduceWork {
 
   void synchronize() override {
     // Synchronize with the copy back to CUDA tensors.
+    c10::OptionalStreamGuard guard;
     for (const auto i : c10::irange(inputs.size())) {
-      c10::Device device = inputs[i].device();
-      events[i].block(
-          c10::impl::VirtualGuardImpl(device.type()).getStream(device));
+      events[i].synchronize();
     }
   }
 
@@ -193,16 +194,20 @@ static c10::intrusive_ptr<ProcessGroupGloo::AsyncWork> makeAllreduceCUDAWork(
     uint64_t seq,
     std::chrono::milliseconds timeout) {
   auto layout = inputs[0].layout();
+  printf("DEBUG LOG makeAllreduceCUDAWork\n");
 
   if (layout == c10::kStrided) {
     if (context->getDevice()->hasGPUDirect()) {
+      printf("DEBUG LOG makeAllreduceCUDAWork hasGPUDirect\n");
       return c10::make_intrusive<AsyncAllreduceCUDADeviceWork>(
           std::move(context), inputs, reduceOp, tag, seq, timeout);
     } else {
+      printf("DEBUG LOG makeAllreduceCUDAWork no hasGPUDirect\n");
       return c10::make_intrusive<AsyncAllreduceCUDAHostWork>(
           std::move(context), inputs, reduceOp, tag, seq, timeout);
     }
   } else if (layout == c10::kSparse) {
+    printf("DEBUG LOG makeAllreduceCUDAWork sparse\n");
     return c10::make_intrusive<AsyncSparseAllreduceCUDAWork>(
         std::move(context), inputs, tag, seq, timeout);
   } else {

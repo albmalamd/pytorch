@@ -214,6 +214,7 @@ void ProcessGroupGloo::AsyncWork::execute(
   // FIXME: We need to call it here since Future completion requires all
   // the work to be synchronized to CUDA.
   work->synchronize();
+  printf("DEBUG LOG AsyncWork::execute synchronize done\n");
   work->finishWorkGloo();
 }
 

@@ -73,13 +73,33 @@ def _apply_optim_in_backward_hook(
         ddp_inst = ddp_weakref()
         reducer, process_group = ddp_inst.reducer, ddp_inst.process_group
         fut = reducer._run_allreduce_hook(bucket)
+        print(f"DEBUG LOG fut: {fut}")
+        print(f"DEBUG LOG process_group: {process_group}")
+        
         optimizer_stream = optim_stream_state.optim_stream
         with optimizer_stream:
+            print(f"DEBUG LOG process_group: {process_group}")
             fut.wait()
 
-            if process_group.name() == "gloo":
-                # torch.cuda.synchronize()
-                torch.cuda.current_stream().synchronize()
+            # if process_group.name() == "gloo":
+            #     event = torch.cuda.Event()
+            #     event.record(torch.cuda.current_stream())
+            #     event.wait(optimizer_stream)
+            # if process_group.name() == "gloo":
+            #     # Zapisz event i zablokuj optimizer_stream
+            #     for tensor in bucket.parameters():
+            #         if tensor.is_cuda:
+            #             # Alternatywnie: użyj torch.cuda.synchronize() dla prostoty
+            #             torch.cuda.synchronize(tensor.device)
+            #             break
+
+
+            # check on NVIdia machine
+            # if process_group.name() == "gloo" and process_group.device().type == "cuda":
+            #     torch.cuda.synchronize()
+                # process_group.synchronize()
+                # optimizer_stream.synchronize()
+                # torch.cuda.current_stream().synchronize()
 
             # Apply gradient division since C++ side only allreduces and does
             # not average. TODO: (rohan-varma) the div factor may be different

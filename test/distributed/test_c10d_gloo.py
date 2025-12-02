@@ -264,6 +264,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
 
     def _create_process_group_gloo(self, store, rank, world_size, opts):
         pg = c10d.ProcessGroupGloo(store, self.rank, self.world_size, opts)
+        print(f"ProcessGroupGlooTest pg {pg} created")
         dist.barrier(group=pg)
         return pg
 
@@ -445,7 +446,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
 
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
-    @skipIfRocm
+    # @skipIfRocm
     def test_broadcast_stress_cuda(self):
         inputs = [
             torch.tensor([i * self.world_size + self.rank]).cuda() for i in range(1000)
@@ -603,7 +604,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
 
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
-    @skipIfRocm
+    # @skipIfRocm
     def test_allreduce_stress_cuda(self):
         inputs = [torch.tensor([i + self.rank]).cuda() for i in range(1000)]
         self._test_allreduce_stress(inputs)
@@ -1057,7 +1058,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
     )
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
-    @skipIfRocm
+    # @skipIfRocm
     def test_scatter_stress_cuda(self):
         inputs = [
             [torch.tensor([i + self.rank]) for _ in range(self.world_size)]
@@ -1231,7 +1232,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
         self._test_gather_stress(inputs, lambda t: t.clone())
 
     @skip_if_lt_x_gpu(2)
-    @skipIfRocm
+    # @skipIfRocm
     @requires_gloo()
     def test_gather_stress_cuda(self):
         inputs = [torch.tensor([i + self.rank]).cuda() for i in range(1000)]
@@ -1368,7 +1369,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
 
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
-    @skipIfRocm
+    # @skipIfRocm
     def test_allgather_stress_cuda(self):
         inputs = [torch.tensor([i + self.rank]).cuda() for i in range(1000)]
         self._test_allgather_stress(inputs, lambda t: t.clone().cuda())
@@ -1555,7 +1556,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
 
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
-    @skipIfRocm
+    # @skipIfRocm
     def test_reduce_stress_cuda(self):
         inputs = [torch.tensor([i + self.rank]).cuda() for i in range(1000)]
         self._test_reduce_stress(inputs)
@@ -1629,7 +1630,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
         pg = self._create_process_group_gloo(
             store, self.rank, self.world_size, self.opts()
         )
-        t = torch.zeros(10, device="cuda")
+        t = [torch.tensor([i + self.rank]) for i in range(1000)]
         work = pg.allreduce(t)
         work.block_current_stream()
         torch.cuda.current_stream().synchronize()
