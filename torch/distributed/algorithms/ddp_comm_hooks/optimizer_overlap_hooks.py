@@ -86,10 +86,8 @@ def _apply_optim_in_backward_hook(
             #     event.record(torch.cuda.current_stream())
             #     event.wait(optimizer_stream)
             # if process_group.name() == "gloo":
-            #     # Zapisz event i zablokuj optimizer_stream
             #     for tensor in bucket.parameters():
             #         if tensor.is_cuda:
-            #             # Alternatywnie: użyj torch.cuda.synchronize() dla prostoty
             #             torch.cuda.synchronize(tensor.device)
             #             break
 

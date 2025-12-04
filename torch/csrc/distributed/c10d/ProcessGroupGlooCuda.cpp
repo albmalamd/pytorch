@@ -114,15 +114,13 @@ class AsyncAllreduceCUDAHostWork : public AsyncAllreduceWork {
     for (const auto i : c10::irange(inputs.size())) {
       guard.reset_stream(streams[i]);
       inputs[i].copy_(tmp[i], /* non_blocking */ true);
-      events[i].record(streams[i]);
     }
   }
 
   void synchronize() override {
     // Synchronize with the copy back to CUDA tensors.
-    c10::OptionalStreamGuard guard;
     for (const auto i : c10::irange(inputs.size())) {
-      events[i].synchronize();
+      streams[i].synchronize();
     }
   }
 
@@ -194,7 +192,7 @@ static c10::intrusive_ptr<ProcessGroupGloo::AsyncWork> makeAllreduceCUDAWork(
     uint64_t seq,
     std::chrono::milliseconds timeout) {
   auto layout = inputs[0].layout();
-  printf("DEBUG LOG makeAllreduceCUDAWork\n");
+  // printf("DEBUG LOG makeAllreduceCUDAWork\n");
 
   if (layout == c10::kStrided) {
     if (context->getDevice()->hasGPUDirect()) {

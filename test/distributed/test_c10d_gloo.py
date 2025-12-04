@@ -1053,9 +1053,9 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
         ]
         self._test_scatter_stress(inputs, lambda t: t.clone())
 
-    @skip_but_pass_in_sandcastle(
-        "Test is flaky, see https://github.com/pytorch/pytorch/issues/15963"
-    )
+    # @skip_but_pass_in_sandcastle(
+    #     "Test is flaky, see https://github.com/pytorch/pytorch/issues/15963"
+    # )
     @skip_if_lt_x_gpu(2)
     @requires_gloo()
     # @skipIfRocm
@@ -1630,7 +1630,7 @@ class ProcessGroupGlooTest(MultiProcessTestCase):
         pg = self._create_process_group_gloo(
             store, self.rank, self.world_size, self.opts()
         )
-        t = [torch.tensor([i + self.rank]) for i in range(1000)]
+        t = [torch.tensor([i + self.rank]).cuda() for i in range(1000)]
         work = pg.allreduce(t)
         work.block_current_stream()
         torch.cuda.current_stream().synchronize()

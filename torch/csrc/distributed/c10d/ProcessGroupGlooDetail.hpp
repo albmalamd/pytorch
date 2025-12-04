@@ -106,6 +106,15 @@ TORCH_API void initializeStreamsEvents(
     std::vector<c10::Stream>& streams,
     std::vector<c10::Event>& events);
 
+// This function initializes a vector of CUDA streams, one for every
+// tensor in the input tensor vector, and ensures that these streams are
+// synchronized with the current default streams. This is needed so
+// that new work on the new streams is serialized w.r.t. all operations
+// on the tensors.
+TORCH_API void initializeStreamsEvents(
+  const std::vector<at::Tensor>& tensors,
+  std::vector<c10::Stream>& streams);
+
 // This function initializes a vector of CUDA streams, one per device,
 // and ensures that these streams are synchronized with the current default
 // streams. It is assumed that the tensors in the nested tensor vectors are

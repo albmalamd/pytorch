@@ -146,6 +146,44 @@ void initializeStreamsEvents(
   }
 }
 
+// This function initializes a vector of CUDA streams, one for every
+// tensor in the input tensor vector, and ensures that these streams are
+// synchronized with the current default streams. This is needed so
+// that new work on the new streams is serialized w.r.t. all operations
+// on the tensors.
+void initializeStreamsEvents(
+  const std::vector<at::Tensor>& tensors,
+  std::vector<c10::Stream>& streams) {
+streams.reserve(tensors.size());
+for (const auto i : c10::irange(tensors.size())) {
+  c10::Device device = tensors[i].device();
+  c10::impl::VirtualGuardImpl impl(device.type());
+  // Get a non-default stream to execute asynchronous CUDA operations
+  // on this device. This ensures that the default stream used
+  // by the caller is not occupied by c10d related operations.
+  streams.push_back(
+      impl.getStreamFromGlobalPool(device, /*isHighPriority=*/true));
+
+  // `tensors` are created on a different stream. Hence, they must record
+  // new streams in this Work to prevent being freed before the Work finishes.
+  if (tensors[i].is_sparse()) {
+    if (tensors[i].is_coalesced()) {
+      impl.recordDataPtrOnStream(
+          tensors[i].indices().storage().data_ptr(), streams[i]);
+      impl.recordDataPtrOnStream(
+          tensors[i].values().storage().data_ptr(), streams[i]);
+    } else {
+      // We will need to coalesce first, which means new tensors will
+      // be allocated on the streams we just allocated, and there
+      // is no need to record them separately.
+    }
+  } else {
+    impl.recordDataPtrOnStream(tensors[i].storage().data_ptr(), streams[i]);
+  }
+}
+}
+
+
 // This function initializes a vector of CUDA streams, one per device,
 // and ensures that these streams are synchronized with the current default
 // streams. It is assumed that the tensors in the nested tensor vectors are
@@ -214,7 +252,7 @@ void ProcessGroupGloo::AsyncWork::execute(
   // FIXME: We need to call it here since Future completion requires all
   // the work to be synchronized to CUDA.
   work->synchronize();
-  printf("DEBUG LOG AsyncWork::execute synchronize done\n");
+  // printf("DEBUG LOG AsyncWork::execute synchronize done\n");
   work->finishWorkGloo();
 }
 
@@ -964,6 +1002,7 @@ c10::intrusive_ptr<Work> ProcessGroupGloo::broadcast(
   auto context = getContext(tag);
   ++seq_;
   if (device.type() == at::kCPU) {
+    printf("DEBUG LOG BroadcastWork CPU\n");
     work = c10::make_intrusive<AsyncBroadcastWork>(
         std::move(context),
         inputs,
@@ -973,6 +1012,7 @@ c10::intrusive_ptr<Work> ProcessGroupGloo::broadcast(
         seq_,
         opts.timeout);
   } else if (device.type() == at::kCUDA) {
+    printf("DEBUG LOG BroadcastWork CUDA\n");
     work = c10::make_intrusive<AsyncBroadcastCUDAWork>(
         std::move(context),
         inputs,
@@ -1317,6 +1357,7 @@ c10::intrusive_ptr<Work> ProcessGroupGloo::reduce(
   auto context = getContext(tag);
   ++seq_;
   if (device.type() == at::kCPU) {
+    printf("DEBUG LOG ReduceWork CPU\n");
     work = c10::make_intrusive<AsyncReduceWork>(
         std::move(context),
         inputs,
@@ -1327,6 +1368,7 @@ c10::intrusive_ptr<Work> ProcessGroupGloo::reduce(
         seq_,
         opts.timeout);
   } else if (device.type() == at::kCUDA) {
+    printf("DEBUG LOG ReduceWork CUDA\n");
     work = c10::make_intrusive<AsyncReduceCUDAWork>(
         std::move(context),
         inputs,
@@ -1615,9 +1657,11 @@ c10::intrusive_ptr<Work> ProcessGroupGloo::allgather(
   auto context = getContext(tag);
   ++seq_;
   if (device.type() == at::kCPU) {
+    printf("DEBUG LOG AllgatherWork CPU\n");
     work = c10::make_intrusive<AsyncAllgatherWork>(
         std::move(context), outputs, inputs, tag, seq_, opts.timeout);
   } else if (device.type() == at::kCUDA) {
+    printf("DEBUG LOG AllgatherWork CUDA\n");
     work = c10::make_intrusive<AsyncAllgatherCUDAWork>(
         std::move(context), outputs, inputs, tag, seq_, opts.timeout);
   } else {
